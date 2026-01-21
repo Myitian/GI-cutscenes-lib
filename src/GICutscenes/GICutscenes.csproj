@@ -20,13 +20,13 @@
 
 	<ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="*" />
-		<Content Include="../versions.json">
+		<Content Include="../../versions.json">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</Content>
-		<Content Include="../README.md">
+		<Content Include="../../README.md">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</Content>
-		<None Include="../README.md">
+		<None Include="../../README.md">
 			<Pack>True</Pack>
 			<PackagePath>\</PackagePath>
 		</None>
