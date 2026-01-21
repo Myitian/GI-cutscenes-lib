@@ -1,1 +1,1 @@
-<Solution><Project Path="cli/GICutscenes.CLI.csproj"/><Project Path="src/GICutscenes.csproj" /></Solution>
+<Solution><Project Path="src/GICutscenes.CLI/GICutscenes.CLI.csproj"/><Project Path="src/GICutscenes/GICutscenes.csproj"/></Solution>

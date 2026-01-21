@@ -4,6 +4,8 @@
 
 A fork of GI-cutscenes focused on performance and the latest .NET features, and makes it more suitable for use as a library rather than a command-line tool. The main library has been pruned, removing the WAV transcoding and MKV muxing functions after decoding. The command-line tools have been streamlined; you can adjust them yourself by referring to the original repository if needed.
 
+In addition, asynchronous processing mode and `Microsoft.Extensions.Logging` support have been added.
+
 If you're not a developer who wants to use GI-cutscenes as a project dependency, I recommend using the original repository. You'll find better community support there.
 
 > [!NOTE]
