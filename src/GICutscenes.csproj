@@ -2,62 +2,31 @@
 
 	<PropertyGroup>
 		<Version>0.5.0</Version>
-		<OutputType>Exe</OutputType>
-		<TargetFramework>net6.0</TargetFramework>
-		<!--<RuntimeIdentifier>win-x64</RuntimeIdentifier>-->
-		<PublishTrimmed>true</PublishTrimmed>
-		<Authors>ToaHartor</Authors>
-		<RootNamespace>GICutscenes</RootNamespace>
-		<Description>A command line program playing with the cutscenes files (USM) from Genshin Impact.</Description>
+		<TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+		<Authors>ToaHartor, Myitian</Authors>
+		<Description>A library playing with the cutscenes files (USM) from Genshin Impact.</Description>
 		<PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
 		<RepositoryUrl>https://github.com/ToaHartor/GI-cutscenes</RepositoryUrl>
 
 		<Nullable>enable</Nullable>
 		<LangVersion>preview</LangVersion>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-		<DebugType>embedded</DebugType>
+    <IsAotCompatible>true</IsAotCompatible>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
 		<RepositoryType>git</RepositoryType>
 		<AnalysisLevel>latest-all</AnalysisLevel>
 		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
 	</PropertyGroup>
 
-	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-		<Optimize>False</Optimize>
-		<DebugType>full</DebugType>
-	</PropertyGroup>
-
-	<PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|AnyCPU'">
-		<DebugType>full</DebugType>
-		<PublishSingleFile>true</PublishSingleFile>
-		<TieredCompilation>true</TieredCompilation>
-		<PublishReadyToRun>true</PublishReadyToRun>
-		<!--<RunAOTCompilation>true</RunAOTCompilation>-->
-	</PropertyGroup>
-
 	<ItemGroup>
-		<PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="7.0.2" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" Version="7.0.0" />
-		<PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="7.0.0" />
-		<PackageReference Include="System.CommandLine" Version="2.0.0-beta3.22114.1" />
-	</ItemGroup>
-
-	<ItemGroup>
-		<Content Include="../appsettings.json">
-			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		</Content>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" Version="*" />
 		<Content Include="../versions.json">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</Content>
 		<Content Include="../README.md">
 			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
 		</Content>
-	</ItemGroup>
-
-	<ItemGroup>
-		<None Include="..\.editorconfig" Link=".editorconfig" />
-		<None Include="..\README.md">
+		<None Include="../README.md">
 			<Pack>True</Pack>
 			<PackagePath>\</PackagePath>
 		</None>

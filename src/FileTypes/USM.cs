@@ -1,202 +1,325 @@
-﻿using System.Text;
-using GICutscenes.Utils;
+﻿using GICutscenes.Events;
+using Microsoft.Extensions.Logging;
+using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
-namespace GICutscenes.FileTypes
+namespace GICutscenes.FileTypes;
+
+public readonly struct USM : IEquatable<USM>
 {
-    internal struct Info
+    [InlineArray(0x20)]
+    private struct Mask
     {
-        public uint signature;
-        public uint dataSize;
-        public byte dataOffset;
-        public ushort paddingSize;
-        public byte chno;
-        public byte dataType;
-        public uint frameTime;
-        public uint frameRate;
+        private byte _;
     }
-    internal class USM
+    private readonly Mask _videoMask1;
+    private readonly Mask _videoMask2;
+    private readonly Mask _audioMask;
+    public USM(ulong key)
     {
-        private readonly string _filename;
-        private readonly string _path;
-        private readonly byte[] _key1;
-        private readonly byte[] _key2;
-        private byte[] _videoMask1;
-        private byte[] _videoMask2;
-        private byte[] _audioMask;
-        public USM(string filename, byte[] key1, byte[] key2)
+        InitMask(key, _videoMask1, _videoMask2, _audioMask);
+    }
+    private static void InitMask(ulong key, Span<byte> videoMask1, Span<byte> videoMask2, Span<byte> audioMask)
+    {
+        Span<byte> keyBytes = stackalloc byte[sizeof(ulong)];
+        BinaryPrimitives.WriteUInt64LittleEndian(keyBytes, key);
+        videoMask1[0x00] = keyBytes[0];
+        videoMask1[0x01] = keyBytes[1];
+        videoMask1[0x02] = keyBytes[2];
+        videoMask1[0x03] = (byte)(keyBytes[3] - 0x34);
+        videoMask1[0x04] = (byte)(keyBytes[4] + 0xF9);
+        videoMask1[0x05] = (byte)(keyBytes[5] ^ 0x13);
+        videoMask1[0x06] = (byte)(keyBytes[6] + 0x61);
+        videoMask1[0x07] = (byte)(videoMask1[0x00] ^ 0xFF);
+        videoMask1[0x08] = (byte)(videoMask1[0x02] + videoMask1[0x01]);
+        videoMask1[0x09] = (byte)(videoMask1[0x01] - videoMask1[0x07]);
+        videoMask1[0x0A] = (byte)(videoMask1[0x02] ^ 0xFF);
+        videoMask1[0x0B] = (byte)(videoMask1[0x01] ^ 0xFF);
+        videoMask1[0x0C] = (byte)(videoMask1[0x0B] + videoMask1[0x09]);
+        videoMask1[0x0D] = (byte)(videoMask1[0x08] - videoMask1[0x03]);
+        videoMask1[0x0E] = (byte)(videoMask1[0x0D] ^ 0xFF);
+        videoMask1[0x0F] = (byte)(videoMask1[0x0A] - videoMask1[0x0B]);
+        videoMask1[0x10] = (byte)(videoMask1[0x08] - videoMask1[0x0F]);
+        videoMask1[0x11] = (byte)(videoMask1[0x10] ^ videoMask1[0x07]);
+        videoMask1[0x12] = (byte)(videoMask1[0x0F] ^ 0xFF);
+        videoMask1[0x13] = (byte)(videoMask1[0x03] ^ 0x10);
+        videoMask1[0x14] = (byte)(videoMask1[0x04] - 0x32);
+        videoMask1[0x15] = (byte)(videoMask1[0x05] + 0xED);
+        videoMask1[0x16] = (byte)(videoMask1[0x06] ^ 0xF3);
+        videoMask1[0x17] = (byte)(videoMask1[0x13] - videoMask1[0x0F]);
+        videoMask1[0x18] = (byte)(videoMask1[0x15] + videoMask1[0x07]);
+        videoMask1[0x19] = (byte)(0x21 - videoMask1[0x13]);
+        videoMask1[0x1A] = (byte)(videoMask1[0x14] ^ videoMask1[0x17]);
+        videoMask1[0x1B] = (byte)(videoMask1[0x16] + videoMask1[0x16]);
+        videoMask1[0x1C] = (byte)(videoMask1[0x17] + 0x44);
+        videoMask1[0x1D] = (byte)(videoMask1[0x03] + videoMask1[0x04]);
+        videoMask1[0x1E] = (byte)(videoMask1[0x05] - videoMask1[0x16]);
+        videoMask1[0x1F] = (byte)(videoMask1[0x1D] ^ videoMask1[0x13]);
+        for (int i = 0; i < 0x20; i++)
         {
-            _path = filename;
-            _filename = Path.GetFileName(filename);
-            _key1 = key1;
-            _key2 = key2;
-            Console.WriteLine($"key1={Convert.ToHexString(_key1)} key2={Convert.ToHexString(_key2)}");
-            InitMask(key1, key2);
+            const uint table = ('C' << 24) | ('U' << 16) | ('R' << 8) | 'U';
+            videoMask2[i] = (byte)(videoMask1[i] ^ 0xFF);
+            audioMask[i] = (byte)((i & 1) == 1 ? table >> ((i & 0b110) << 2) : videoMask1[i] ^ 0xFFu);
+            // audioMask[i] = (byte)((i & 1) == 1 ? "URUC"u8[i >> 1 & 3] : videoMask1[i] ^ 0xFF);
         }
-        private void InitMask(byte[] key1, byte[] key2)
+    }
+    private void MaskVideo(Span<byte> data)
+    {
+        const int dataOffset = 0x40;
+        if (data.Length - dataOffset < 0x200)
+            return;
+        data = data[dataOffset..];
+        ReadOnlySpan<byte> videoMask1 = _videoMask1;
+        ReadOnlySpan<byte> videoMask2 = _videoMask2;
+        Span<byte> mask = stackalloc byte[0x20];
+        videoMask2.CopyTo(mask);
+        for (int i = 0x100; i < data.Length; i++)
+            mask[i & 0x1F] = (byte)((data[i] ^= mask[i & 0x1F]) ^ videoMask2[i & 0x1F]);
+        videoMask1.CopyTo(mask);
+        for (int i = 0; i < 0x100; i++)
+            data[i] ^= mask[i & 0x1F] ^= data[0x100 + i];
+    }
+    // Not used anyway, but might be in the future
+    private void MaskAudio(Span<byte> data)
+    {
+        const int dataOffset = 0x140;
+        data = data[dataOffset..];
+        ReadOnlySpan<byte> audioMask = _audioMask;
+        for (int i = 0; i < data.Length; i++)  // To be confirmed, could start at the current index of data as well...
+            data[i] ^= audioMask[i & 0x1F];
+    }
+    public bool TryDemux(
+        Stream input,
+        Func<Stream>? videoOutputFactory = null,
+        Func<byte, Stream>? audioOutputFactory = null,
+        ILogger? logger = null)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        Stream? videoOutput = null;
+        Dictionary<byte, Stream>? audioOutputs = null;
+        try
         {
-            _videoMask1 = new byte[0x20];
-            _videoMask1[0x00] = key1[0];
-            _videoMask1[0x01] = key1[1];
-            _videoMask1[0x02] = key1[2];
-            _videoMask1[0x03] = (byte)(key1[3] - 0x34);
-            _videoMask1[0x04] = (byte)(key2[0] + 0xF9);
-            _videoMask1[0x05] = (byte)(key2[1] ^ 0x13);
-            _videoMask1[0x06] = (byte)(key2[2] + 0x61);
-            _videoMask1[0x07] = (byte)(_videoMask1[0x00] ^ 0xFF);
-            _videoMask1[0x08] = (byte)(_videoMask1[0x02] + _videoMask1[0x01]);
-            _videoMask1[0x09] = (byte)(_videoMask1[0x01] - _videoMask1[0x07]);
-            _videoMask1[0x0A] = (byte)(_videoMask1[0x02] ^ 0xFF);
-            _videoMask1[0x0B] = (byte)(_videoMask1[0x01] ^ 0xFF);
-            _videoMask1[0x0C] = (byte)(_videoMask1[0x0B] + _videoMask1[0x09]);
-            _videoMask1[0x0D] = (byte)(_videoMask1[0x08] - _videoMask1[0x03]);
-            _videoMask1[0x0E] = (byte)(_videoMask1[0x0D] ^ 0xFF);
-            _videoMask1[0x0F] = (byte)(_videoMask1[0x0A] - _videoMask1[0x0B]);
-            _videoMask1[0x10] = (byte)(_videoMask1[0x08] - _videoMask1[0x0F]);
-            _videoMask1[0x11] = (byte)(_videoMask1[0x10] ^ _videoMask1[0x07]);
-            _videoMask1[0x12] = (byte)(_videoMask1[0x0F] ^ 0xFF);
-            _videoMask1[0x13] = (byte)(_videoMask1[0x03] ^ 0x10);
-            _videoMask1[0x14] = (byte)(_videoMask1[0x04] - 0x32);
-            _videoMask1[0x15] = (byte)(_videoMask1[0x05] + 0xED);
-            _videoMask1[0x16] = (byte)(_videoMask1[0x06] ^ 0xF3);
-            _videoMask1[0x17] = (byte)(_videoMask1[0x13] - _videoMask1[0x0F]);
-            _videoMask1[0x18] = (byte)(_videoMask1[0x15] + _videoMask1[0x07]);
-            _videoMask1[0x19] = (byte)(0x21 - _videoMask1[0x13]);
-            _videoMask1[0x1A] = (byte)(_videoMask1[0x14] ^ _videoMask1[0x17]);
-            _videoMask1[0x1B] = (byte)(_videoMask1[0x16] + _videoMask1[0x16]);
-            _videoMask1[0x1C] = (byte)(_videoMask1[0x17] + 0x44);
-            _videoMask1[0x1D] = (byte)(_videoMask1[0x03] + _videoMask1[0x04]);
-            _videoMask1[0x1E] = (byte)(_videoMask1[0x05] - _videoMask1[0x16]);
-            _videoMask1[0x1F] = (byte)(_videoMask1[0x1D] ^ _videoMask1[0x13]);
-
-            byte[] table2 = Encoding.ASCII.GetBytes("URUC");
-            _videoMask2 = new byte[0x20];
-            _audioMask = new byte[0x20];
-            for (int i = 0; i < 0x20; i++)
+            Span<byte> byteBlock = stackalloc byte[0x20];
+            while (input.ReadAtLeast(byteBlock, 0x20, false) == 0x20)
             {
-                _videoMask2[i] = (byte)(_videoMask1[i] ^ 0xFF);
-                _audioMask[i] = (byte)((i & 1) == 1 ? table2[i >> 1 & 3] : _videoMask1[i] ^ 0xFF);
-            }
-        }
-
-        private void MaskVideo(ref byte[] data, int size)
-        {
-            const int dataOffset = 0x40;
-            size -= dataOffset;
-            if (size < 0x200) return;
-            byte[] mask = new byte[0x20];
-            Array.Copy(_videoMask2, mask, 0x20);
-            for (int i = 0x100; i < size; i++) mask[i & 0x1F] = (byte)((data[i + dataOffset] ^= mask[i & 0x1F]) ^ _videoMask2[i & 0x1F]);
-            Array.Copy(_videoMask1, mask, 0x20);
-            for (int i = 0; i < 0x100; i++) data[i + dataOffset] ^= mask[i & 0x1F] ^= data[0x100 + i + dataOffset];
-        }
-
-        // Not used anyway, but might be in the future
-        private void MaskAudio(ref byte[] data, uint size)
-        {
-            const uint dataOffset = 0x140;
-            size -= dataOffset;
-            for (int i = 0; i < size; i++)  // To be confirmed, could start at the current index of data as well...
-            {
-                data[i + dataOffset] ^= _audioMask[i & 0x1F];
-            }
-        }
-
-        public Dictionary<string, List<string>> Demux(bool videoExtract, bool audioExtract, string outputDir)
-        {
-
-            FileStream filePointer = File.OpenRead(_path);  // TODO: Use a binary reader
-            long fileSize = filePointer.Length;
-            Info info = new();
-            Console.WriteLine($"Demuxing {_filename} : extracting video and audio...");
-
-            Dictionary<string, BinaryWriter> fileStreams = new(); // File paths as keys
-            Dictionary<string, List<string>> filePaths = new();
-            string path;
-            while (fileSize > 0)
-            {
-                byte[] byteBlock = new byte[32];
-                filePointer.Read(byteBlock, 0, byteBlock.Length);
-                fileSize -= 32;
-
-                info.signature = Tools.Bswap(BitConverter.ToUInt32(byteBlock, 0));
-                info.dataSize = Tools.Bswap(BitConverter.ToUInt32(byteBlock, 4));
-                info.dataOffset = byteBlock[9];
-                info.paddingSize = Tools.Bswap(BitConverter.ToUInt16(byteBlock, 10));
-                info.chno = byteBlock[12];
-                info.dataType = byteBlock[15];
-                info.frameTime = Tools.Bswap(BitConverter.ToUInt32(byteBlock, 16));
-                info.frameRate = Tools.Bswap(BitConverter.ToUInt32(byteBlock, 20));
-
-                int size = (int)(info.dataSize - info.dataOffset - info.paddingSize);
-                filePointer.Seek(info.dataOffset - 0x18, SeekOrigin.Current);
-                byte[] data = new byte[size];
-                filePointer.Read(data);
-                filePointer.Seek(info.paddingSize, SeekOrigin.Current);
-                fileSize -= info.dataSize - 0x18;
-
-                switch (info.signature)
+                uint signature = BinaryPrimitives.ReadUInt32BigEndian(byteBlock);
+                uint dataSize = BinaryPrimitives.ReadUInt32BigEndian(byteBlock[4..]);
+                byte dataOffset = byteBlock[9];
+                ushort paddingSize = BinaryPrimitives.ReadUInt16BigEndian(byteBlock[10..]);
+                byte chNo = byteBlock[12];
+                byte dataType = byteBlock[15];
+                int size = (int)(dataSize - dataOffset - paddingSize);
+                if (size < 0 || dataOffset < 0x18)
                 {
-                    case 0x43524944: // CRID
-
+                    USMEvents.LogInvalidData.InvokeLog(logger, dataSize, dataOffset, paddingSize);
+                    return false;
+                }
+                input.Seek(dataOffset - 0x18, SeekOrigin.Current);
+                using PooledArrayHandle<byte> array = new(size);
+                Span<byte> data = array.Array.AsSpan(0, size);
+                int read = input.ReadAtLeast(data, size, false);
+                if (read < size)
+                {
+                    CommonEvents.LogStreamEndedTooEarly.InvokeLog(logger, size, read);
+                    return false;
+                }
+                switch (signature)
+                {
+                    case ('C' << 24) | ('R' << 16) | ('I' << 8) | 'D':
                         break;
-                    case 0x40534656: // @SFV    Video block
-                        switch (info.dataType)
+                    // Video block
+                    case ('@' << 24) | ('S' << 16) | ('F' << 8) | 'V':
+                        if (videoOutputFactory is null)
+                        {
+                            USMEvents.LogSkipSFVChunk.InvokeLog(logger);
+                            break;
+                        }
+                        switch (dataType)
                         {
                             case 0:
-                                if (videoExtract)
-                                {
-                                    MaskVideo(ref data, size);
-                                    path = Path.Combine(outputDir, _filename[..^4] + ".ivf");
-                                    if (!fileStreams.ContainsKey(path))
-                                    {
-                                        fileStreams.Add(path, new BinaryWriter(new FileStream(path, FileMode.Create, FileAccess.Write)));
-                                        if (!filePaths.ContainsKey("ivf")) filePaths.Add("ivf", new List<string>{path});
-                                        else filePaths["ivf"].Add(path);
-                                    }
-                                    fileStreams[path].Write(data);
-                                }
+                                MaskVideo(data);
+                                videoOutput ??= videoOutputFactory.Invoke();
+                                videoOutput.Write(data);
                                 break;
                             default: // Not implemented, we don't have any uses for it
+                                USMEvents.LogSkipUnusedVideoDataType.InvokeLog(logger, dataType);
                                 break;
                         }
                         break;
-
-                    case 0x40534641: // @SFA    Audio block
-                        switch (info.dataType)
+                    // Audio block
+                    case ('@' << 24) | ('S' << 16) | ('F' << 8) | 'A':
+                        if (audioOutputFactory is null)
+                        {
+                            USMEvents.LogSkipSFAChunk.InvokeLog(logger);
+                            break;
+                        }
+                        switch (dataType)
                         {
                             case 0:
-                                if (audioExtract)
-                                {
-                                    // Might need some extra work if the audio has to be decrypted during the demuxing
-                                    // (hello AudioMask)
-                                    path = Path.Combine(outputDir, _filename[..^4] + $"_{info.chno}.hca");
-                                    if (!fileStreams.ContainsKey(path))
-                                    {
-                                        fileStreams.Add(path, new BinaryWriter(new FileStream(path, FileMode.Create, FileAccess.Write)));
-                                        if (!filePaths.ContainsKey("hca")) filePaths.Add("hca", new List<string> { path });
-                                        else filePaths["hca"].Add(path);
-                                    }
-                                    fileStreams[path].Write(data);
-                                }
+                                // Might need some extra work if the audio has to be decrypted during the demuxing
+                                // (hello AudioMask)
+                                audioOutputs ??= [];
+                                ref Stream? audioOutput = ref CollectionsMarshal.GetValueRefOrAddDefault(audioOutputs, chNo, out _);
+                                audioOutput ??= audioOutputFactory(chNo);
+                                audioOutput.Write(data);
                                 break;
                             default: // No need to implement it, we lazy
+                                USMEvents.LogSkipUnusedAudioDataType.InvokeLog(logger, dataType);
                                 break;
                         }
                         break;
-
-                    case 0x40435545: // @CUE - Might be used to play a certain part of the video, but shouldn't be needed anyway (appears in cutscene Cs_Sumeru_AQ30161501_DT)
-                        Console.WriteLine("@CUE field detected in USM, skipping as we don't need it");
-                        break;
                     default:
-                        Console.WriteLine("Signature {0} unknown, skipping...", info.signature);
+                        if (logger is null)
+                            break;
+                        if (signature is (('@' << 24) | ('C' << 16) | ('U' << 8) | 'E'))
+                            // Might be used to play a certain part of the video, but shouldn't be needed anyway
+                            // (appears in cutscene Cs_Sumeru_AQ30161501_DT)
+                            USMEvents.LogSkipCUEChunk.InvokeLog(logger);
+                        else
+                            USMEvents.LogSkipUnknownChunk.InvokeLog(logger, signature);
                         break;
                 }
+                input.Seek(paddingSize, SeekOrigin.Current);
             }
+            return true;
+        }
+        finally
+        {
             // Closing Streams
-            filePointer.Close();
-            foreach (BinaryWriter stream in fileStreams.Values) stream.Close();
-            return filePaths;
+            videoOutput?.Dispose();
+            if (audioOutputs is not null)
+            {
+                foreach (Stream audioOutput in audioOutputs.Values)
+                    audioOutput.Dispose();
+            }
         }
     }
-
+    public async Task<bool> TryDemuxAsync(
+        Stream input,
+        Func<Stream>? videoOutputFactory = null,
+        Func<byte, Stream>? audioOutputFactory = null,
+        ILogger? logger = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(input);
+        Stream? videoOutput = null;
+        Dictionary<byte, Stream>? audioOutputs = null;
+        try
+        {
+            const int blockInfoSize = 0x20;
+            byte[] blockInfo = new byte[blockInfoSize];
+            while (await input.ReadAtLeastAsync(blockInfo, blockInfoSize, false, cancellationToken).ConfigureAwait(false) == blockInfoSize)
+            {
+                uint signature = BinaryPrimitives.ReadUInt32BigEndian(blockInfo);
+                uint dataSize = BinaryPrimitives.ReadUInt32BigEndian(blockInfo.AsSpan(4));
+                byte dataOffset = blockInfo[9];
+                ushort paddingSize = BinaryPrimitives.ReadUInt16BigEndian(blockInfo.AsSpan(10));
+                byte chNo = blockInfo[12];
+                byte dataType = blockInfo[15];
+                int size = (int)(dataSize - dataOffset - paddingSize);
+                if (size < 0 || dataOffset < 0x18)
+                {
+                    USMEvents.LogInvalidData.InvokeLog(logger, dataSize, dataOffset, paddingSize);
+                    return false;
+                }
+                input.Seek(dataOffset - 0x18, SeekOrigin.Current);
+                using PooledArrayHandle<byte> array = new(size);
+                Memory<byte> data = array.Array.AsMemory(0, size);
+                int read = await input.ReadAtLeastAsync(data, size, false, cancellationToken).ConfigureAwait(false);
+                if (read < size)
+                {
+                    CommonEvents.LogStreamEndedTooEarly.InvokeLog(logger, size, read);
+                    return false;
+                }
+                switch (signature)
+                {
+                    case ('C' << 24) | ('R' << 16) | ('I' << 8) | 'D':
+                        break;
+                    // Video block
+                    case ('@' << 24) | ('S' << 16) | ('F' << 8) | 'V':
+                        if (videoOutputFactory is null)
+                        {
+                            USMEvents.LogSkipSFVChunk.InvokeLog(logger);
+                            break;
+                        }
+                        switch (dataType)
+                        {
+                            case 0:
+                                MaskVideo(data.Span);
+                                videoOutput ??= videoOutputFactory.Invoke();
+                                await videoOutput.WriteAsync(data, cancellationToken).ConfigureAwait(false);
+                                break;
+                            default: // Not implemented, we don't have any uses for it
+                                USMEvents.LogSkipUnusedVideoDataType.InvokeLog(logger, dataType);
+                                break;
+                        }
+                        break;
+                    // Audio block
+                    case ('@' << 24) | ('S' << 16) | ('F' << 8) | 'A':
+                        if (audioOutputFactory is null)
+                        {
+                            USMEvents.LogSkipSFAChunk.InvokeLog(logger);
+                            break;
+                        }
+                        switch (dataType)
+                        {
+                            case 0:
+                                // Might need some extra work if the audio has to be decrypted during the demuxing
+                                // (hello AudioMask)
+                                audioOutputs ??= [];
+                                ref Stream? audioOutput = ref CollectionsMarshal.GetValueRefOrAddDefault(audioOutputs, chNo, out _);
+                                audioOutput ??= audioOutputFactory(chNo);
+                                await audioOutput.WriteAsync(data, cancellationToken).ConfigureAwait(false);
+                                break;
+                            default: // No need to implement it, we lazy
+                                USMEvents.LogSkipUnusedAudioDataType.InvokeLog(logger, dataType);
+                                break;
+                        }
+                        break;
+                    default:
+                        if (logger is null)
+                            break;
+                        if (signature is (('@' << 24) | ('C' << 16) | ('U' << 8) | 'E'))
+                            // Might be used to play a certain part of the video, but shouldn't be needed anyway
+                            // (appears in cutscene Cs_Sumeru_AQ30161501_DT)
+                            USMEvents.LogSkipCUEChunk.InvokeLog(logger);
+                        else
+                            USMEvents.LogSkipUnknownChunk.InvokeLog(logger, signature);
+                        break;
+                }
+                input.Seek(paddingSize, SeekOrigin.Current);
+            }
+            return true;
+        }
+        finally
+        {
+            // Closing Streams
+            if (videoOutput is not null)
+                await videoOutput.DisposeAsync().ConfigureAwait(false);
+            if (audioOutputs is not null)
+            {
+                foreach (Stream audioOutput in audioOutputs.Values)
+                    await audioOutput.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+    }
+    public bool Equals(USM other)
+        => ((ReadOnlySpan<byte>)_videoMask1).SequenceEqual(other._videoMask1)
+        && ((ReadOnlySpan<byte>)_videoMask2).SequenceEqual(other._videoMask2)
+        && ((ReadOnlySpan<byte>)_audioMask).SequenceEqual(other._audioMask);
+    public override bool Equals(object? obj)
+        => obj is USM other && Equals(other);
+    public override int GetHashCode()
+    {
+        HashCode h = new();
+        h.AddBytes(_videoMask1);
+        h.AddBytes(_videoMask2);
+        h.AddBytes(_audioMask);
+        return h.ToHashCode();
+    }
+    public static bool operator ==(USM left, USM right)
+        => left.Equals(right);
+    public static bool operator !=(USM left, USM right)
+        => !left.Equals(right);
 }

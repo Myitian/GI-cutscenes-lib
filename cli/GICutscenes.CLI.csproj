@@ -1,0 +1,27 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <Authors>ToaHartor, Myitian</Authors>
+    <Description>A command line program playing with the cutscenes files (USM) from Genshin Impact.</Description>
+    <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
+    <RepositoryUrl>https://github.com/ToaHartor/GI-cutscenes</RepositoryUrl>
+
+		<Nullable>enable</Nullable>
+		<LangVersion>preview</LangVersion>
+		<ImplicitUsings>enable</ImplicitUsings>
+    <IsAotCompatible>true</IsAotCompatible>
+		<PackageReadmeFile>README.md</PackageReadmeFile>
+		<RepositoryType>git</RepositoryType>
+		<AnalysisLevel>latest-all</AnalysisLevel>
+		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\src\GICutscenes.csproj" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="*" />
+    <PackageReference Include="System.IO.Pipelines" Version="*" />
+  </ItemGroup>
+
+</Project>
