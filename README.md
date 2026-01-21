@@ -20,9 +20,9 @@ A command line program playing with the cutscenes files (USM) from Genshin Impac
 
 Able to extract the USM files and decrypt the tracks.
 
-#### Cutscenes from version 1.0 to 6.0 can be decrypted.
+#### Cutscenes from version 1.0 to 6.3 can be decrypted.
 
-_Also includes CBT3, which has the same files than the live version_
+*Also includes CBT3, which has the same files than the live version*
 
 If you want to extract newer cutscenes but the `versions.json` in the released zip is outdated, simply download the updated file in the project tree ([here](https://raw.githubusercontent.com/ToaHartor/GI-cutscenes/main/versions.json)) and replace the file.
 This file will be updated with the version key every time a new version drops.
