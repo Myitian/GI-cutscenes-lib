@@ -8,6 +8,7 @@
     <PackageLicenseExpression>GPL-3.0-only</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/ToaHartor/GI-cutscenes</RepositoryUrl>
 
+    <RollForward>LatestMajor</RollForward>
 		<Nullable>enable</Nullable>
 		<LangVersion>preview</LangVersion>
 		<ImplicitUsings>enable</ImplicitUsings>
