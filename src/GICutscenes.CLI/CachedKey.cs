@@ -1,7 +1,8 @@
-﻿using GICutscenes.CLI;
-using GICutscenes.FileTypes;
+﻿using GICutscenes.FileTypes;
 using Microsoft.Extensions.Logging;
 using System.IO.Pipes;
+
+namespace GICutscenes.CLI;
 
 #pragma warning disable CA1031
 sealed class CachedKey(ulong key)

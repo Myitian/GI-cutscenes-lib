@@ -1,7 +1,4 @@
-﻿using GICutscenes;
-using GICutscenes.CLI;
-using GICutscenes.Events;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.Frozen;
 using System.Runtime.InteropServices;
@@ -9,13 +6,15 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
+namespace GICutscenes.CLI;
+
 #pragma warning disable CA1031,CA1303
 static partial class Program
 {
     private static readonly Dictionary<ulong, CachedKey> KeyCache = [];
     private static FrozenDictionary<string, ulong> VersionMap = FrozenDictionary<string, ulong>.Empty;
     private static ILogger Logger = NullLogger.Instance;
-    private static int Main(string[] args)
+    private static int Main()
     {
         Console.InputEncoding = Console.OutputEncoding = Encoding.UTF8;
         using (ILoggerFactory loggerFactory = LoggerFactory.Create(builder => builder.AddConsole()))
