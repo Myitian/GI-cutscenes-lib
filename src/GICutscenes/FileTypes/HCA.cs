@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 
 namespace GICutscenes.FileTypes;
 
@@ -64,36 +65,15 @@ public readonly struct HCA : IEquatable<HCA>
         0x82E3, 0x02E6, 0x02EC, 0x82E9, 0x02F8, 0x82FD, 0x82F7, 0x02F2, 0x02D0, 0x82D5, 0x82DF, 0x02DA, 0x82CB, 0x02CE, 0x02C4, 0x82C1,
         0x8243, 0x0246, 0x024C, 0x8249, 0x0258, 0x825D, 0x8257, 0x0252, 0x0270, 0x8275, 0x827F, 0x027A, 0x826B, 0x026E, 0x0264, 0x8261,
         0x0220, 0x8225, 0x822F, 0x022A, 0x823B, 0x023E, 0x0234, 0x8231, 0x8213, 0x0216, 0x021C, 0x8219, 0x0208, 0x820D, 0x8207, 0x0202];
+    [SkipLocalsInit]
     public HCA(ulong key)
     {
-        InitTable56(key, _ciphTable);
-    }
-    private static void InitTempTable(byte key, Span<byte> table)
-    {
-        int mul = ((key & 1) << 3) | 5;
-        int add = (key & 0xE) | 1;
-        key >>= 4;
-        for (int i = 0; i < table.Length; i++)
-        {
-            key = (byte)(key * mul + add & 0xF);
-            table[i] = key;
-        }
-    }
-    private static void InitTable56(ulong key, Span<byte> ciphTable)
-    {
+        // Note: Using `SkipLocalsInit` here seems to have almost no effect on reducing execution time.
+        //       It might reduce a few instructions, such as `vmovdqa` or `vmovdqu`.
+        //       Since it doesn't cause any problems, we've kept it.
+        Span<byte> ciphTable = _ciphTable;
         Span<byte> t1 = stackalloc byte[8];
-        uint key1 = (uint)key;
-        uint key2 = (uint)(key >> 32);
-
-        if (key1 == 0)
-            key2--;
-        key1--;
-        for (int i = 0; i < 7; i++)
-        {
-            t1[i] = (byte)key1;
-            key1 = (key1 >> 8) | (key2 << 24);
-            key2 >>= 8;
-        }
+        BinaryPrimitives.WriteUInt64LittleEndian(t1, key - 1);
         ReadOnlySpan<byte> t2 = [
             t1[1],
             (byte)(t1[1] ^ t1[6]),
@@ -115,31 +95,46 @@ public readonly struct HCA : IEquatable<HCA>
         Span<byte> t3 = stackalloc byte[0x100];
         Span<byte> t31 = stackalloc byte[0x10];
         Span<byte> t32 = stackalloc byte[0x10];
+        Span<ulong> t3u = MemoryMarshal.Cast<byte, ulong>(t3);
+        Span<ulong> t32u = MemoryMarshal.Cast<byte, ulong>(t32);
         InitTempTable(t1[0], t31);
-        // Create Table
         for (int i = 0; i < 0x10; i++)
         {
             InitTempTable(t2[i], t32);
-            byte v = (byte)(t31[i] << 4);
-            int index = 0;
-            foreach (byte j in t32)
-            {
-                t3[i * 0x10 + index] = (byte)(v | j);
-                index++;
-            }
+            ulong v = 0x0101010101010101UL * (byte)(t31[i] << 4);
+            t3u[i * 2] = v | t32u[0];
+            t3u[i * 2 + 1] = v | t32u[1];
         }
-        // CIPHテーブル
         int iTable = 1;
         for (int i = 0, v = 0; i < 0x100; i++)
         {
-            v = v + 0x11 & 0xFF;
-            byte a = t3[v];
-            if (a != 0 && a != 0xFF) ciphTable[iTable++] = a;
+            v += 0x11;
+            byte a = t3[v & 0xFF];
+            if (a is not (0 or 0xFF))
+                ciphTable[iTable++] = a;
         }
         ciphTable[0] = 0;
         ciphTable[0xFF] = 0xFF;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        static void InitTempTable(uint key, Span<byte> table)
+        {
+            uint mul = ((key & 1) << 3) | 5;
+            uint add = (key & 0xE) | 1;
+            key >>= 4;
+            for (int i = 0; i < table.Length; i++)
+            {
+                key = key * mul + add;
+                table[i] = (byte)(key & 0xF);
+            }
+        }
     }
-    private static ReadOnlySpan<byte> GetMask(in HCA hca, int type)
+    public static void Mask(Span<byte> data, ReadOnlySpan<byte> ciphTable)
+    {
+        foreach (ref byte b in data)
+            b = ciphTable[b];
+    }
+    public static ReadOnlySpan<byte> GetMask(in HCA hca, int type)
     {
         return type switch
         {
@@ -160,11 +155,6 @@ public readonly struct HCA : IEquatable<HCA>
             // case 56:
             _ => hca._ciphTable,
         };
-    }
-    private static void Mask(Span<byte> data, ReadOnlySpan<byte> ciphTable)
-    {
-        foreach (ref byte b in data)
-            b = ciphTable[b];
     }
     public static ushort CheckSum(ReadOnlySpan<byte> data)
     {
@@ -188,7 +178,7 @@ public readonly struct HCA : IEquatable<HCA>
         int headerSize = BinaryPrimitives.ReadUInt16BigEndian(hcaBytes[6..]);
         if (sign is not (('H' << 24) | ('C' << 16) | ('A' << 8)) || headerSize < magicSize)
         {
-            HCAEvents.LogInvalidSignature.InvokeLog(logger, BinaryPrimitives.ReadUInt64BigEndian(hcaBytes));
+            HCAEvents.LogInvalidSignature.InvokeLog(logger, Convert.ToHexString(hcaBytes));
             return false;
         }
         BinaryPrimitives.WriteUInt32BigEndian(hcaBytes, sign);
@@ -306,7 +296,7 @@ public readonly struct HCA : IEquatable<HCA>
         int headerSize = BinaryPrimitives.ReadUInt16BigEndian(hcaBytes.AsSpan(6));
         if (sign is not (('H' << 24) | ('C' << 16) | ('A' << 8)) || headerSize < magicSize)
         {
-            HCAEvents.LogInvalidSignature.InvokeLog(logger, BinaryPrimitives.ReadUInt64BigEndian(hcaBytes));
+            HCAEvents.LogInvalidSignature.InvokeLog(logger, Convert.ToHexString(hcaBytes));
             return false;
         }
         BinaryPrimitives.WriteUInt32BigEndian(hcaBytes, sign);

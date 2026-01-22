@@ -16,6 +16,7 @@
 		<RepositoryType>git</RepositoryType>
 		<AnalysisLevel>latest-all</AnalysisLevel>
 		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 	</PropertyGroup>
 
 	<ItemGroup>

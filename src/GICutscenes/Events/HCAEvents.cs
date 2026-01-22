@@ -8,7 +8,7 @@ public static class HCAEvents
     /// <summary>
     /// Invalid signature: {Signature}
     /// </summary>
-    internal static readonly Action<ILogger, ulong, Exception?> LogInvalidSignature = LoggerMessage.Define<ulong>(
+    internal static readonly Action<ILogger, string, Exception?> LogInvalidSignature = LoggerMessage.Define<string>(
         LogLevel.Error,
         InvalidSignature,
         "Invalid signature: {Signature}");

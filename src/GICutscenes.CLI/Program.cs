@@ -1,17 +1,14 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using System.Collections.Frozen;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace GICutscenes.CLI;
 
-#pragma warning disable CA1031,CA1303
 static partial class Program
 {
-    private static readonly Dictionary<ulong, CachedKey> KeyCache = [];
     private static FrozenDictionary<string, ulong> VersionMap = FrozenDictionary<string, ulong>.Empty;
     private static ILogger Logger = NullLogger.Instance;
     private static int Main()
@@ -42,6 +39,8 @@ static partial class Program
             }
         }
 
+        KeyMode keyMode = KeyMode.Mixed;
+
         Console.WriteLine("USM file/folder:");
         string usm = Console.ReadLine().AsSpan().Trim().Trim('"').ToString();
         Console.WriteLine("Output folder:");
@@ -56,11 +55,11 @@ static partial class Program
                 MatchCasing = MatchCasing.CaseInsensitive,
                 MatchType = MatchType.Simple
             }))
-                ProcessUSM(usmFile, output);
+                ProcessUSM(usmFile, output, keyMode);
         }
         else
         {
-            ProcessUSM(usm, output);
+            ProcessUSM(usm, output, keyMode);
         }
         return 0;
     }
@@ -68,6 +67,7 @@ static partial class Program
     private static bool ProcessUSM(
         string file,
         string outputDir = "./",
+        KeyMode keyMode = KeyMode.Mixed,
         bool validateExtension = true)
     {
         Events.LogProcessFile.InvokeLog(Logger, file);
@@ -77,19 +77,21 @@ static partial class Program
             return false;
         }
         string usmName = Path.GetFileNameWithoutExtension(file);
-        if (!VersionMap.TryGetValue(usmName, out ulong key2))
+        ulong key1 = 0, key2 = 0;
+        if (keyMode.HasFlag(KeyMode.FromExternal) && !VersionMap.TryGetValue(usmName, out key2))
         {
             Events.LogNoVersionInfoFor.InvokeLog(Logger, usmName);
             return false;
         }
-        ulong key = KeyUtils.GetEncryptionKey(usmName, key2);
-        CachedKey cachedKey = GetOrCompute(key);
+        if (keyMode.HasFlag(KeyMode.FromName))
+            key1 = KeyUtils.GetEncryptionKey(usmName);
+        ulong key = KeyUtils.MergeEncryptionKey(key1, key2);
         Events.LogReadFile.InvokeLog(Logger, file);
         bool result;
         try
         {
             using FileStream usmStream = File.OpenRead(file);
-            result = cachedKey.TryDemuxAndDecrypt(usmStream, VideoOutputFactory, AudioOutputFactory, Logger);
+            result = Context.TryDemuxAndDecrypt(key, usmStream, VideoOutputFactory, AudioOutputFactory, Logger);
         }
         catch (Exception ex)
         {
@@ -118,13 +120,16 @@ static partial class Program
         }
     }
 
-    private static CachedKey GetOrCompute(ulong key)
-    {
-        ref CachedKey? cachedKey = ref CollectionsMarshal.GetValueRefOrAddDefault(KeyCache, key, out _);
-        return cachedKey ??= new(key);
-    }
-
     [JsonSourceGenerationOptions(WriteIndented = true)]
     [JsonSerializable(typeof(VersionList))]
     sealed partial class VersionJson : JsonSerializerContext;
+
+    [Flags]
+    enum KeyMode
+    {
+        None = 0,
+        FromExternal = 0b01,
+        FromName = 0b10,
+        Mixed = FromExternal | FromName,
+    }
 }

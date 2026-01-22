@@ -18,31 +18,28 @@ public readonly struct USM : IEquatable<USM>
     private readonly Mask _audioMask;
     public USM(ulong key)
     {
-        InitMask(key, _videoMask1, _videoMask2, _audioMask);
-    }
-    private static void InitMask(ulong key, Span<byte> videoMask1, Span<byte> videoMask2, Span<byte> audioMask)
-    {
-        Span<byte> keyBytes = stackalloc byte[sizeof(ulong)];
-        BinaryPrimitives.WriteUInt64LittleEndian(keyBytes, key);
-        videoMask1[0x00] = keyBytes[0];
-        videoMask1[0x01] = keyBytes[1];
-        videoMask1[0x02] = keyBytes[2];
-        videoMask1[0x03] = (byte)(keyBytes[3] - 0x34);
-        videoMask1[0x04] = (byte)(keyBytes[4] + 0xF9);
-        videoMask1[0x05] = (byte)(keyBytes[5] ^ 0x13);
-        videoMask1[0x06] = (byte)(keyBytes[6] + 0x61);
-        videoMask1[0x07] = (byte)(videoMask1[0x00] ^ 0xFF);
+        Span<byte> videoMask1 = _videoMask1;
+        Span<byte> videoMask2 = _videoMask2;
+        Span<byte> audioMask = _audioMask;
+        videoMask1[0x00] = (byte)key;
+        videoMask1[0x01] = (byte)(key >> (1 * 8));
+        videoMask1[0x02] = (byte)(key >> (2 * 8));
+        videoMask1[0x03] = (byte)((key >> (3 * 8)) - 0x34);
+        videoMask1[0x04] = (byte)((key >> (4 * 8)) + 0xF9);
+        videoMask1[0x05] = (byte)((key >> (5 * 8)) ^ 0x13);
+        videoMask1[0x06] = (byte)((key >> (6 * 8)) + 0x61);
+        videoMask1[0x07] = (byte)~videoMask1[0x00];
         videoMask1[0x08] = (byte)(videoMask1[0x02] + videoMask1[0x01]);
         videoMask1[0x09] = (byte)(videoMask1[0x01] - videoMask1[0x07]);
-        videoMask1[0x0A] = (byte)(videoMask1[0x02] ^ 0xFF);
-        videoMask1[0x0B] = (byte)(videoMask1[0x01] ^ 0xFF);
+        videoMask1[0x0A] = (byte)~videoMask1[0x02];
+        videoMask1[0x0B] = (byte)~videoMask1[0x01];
         videoMask1[0x0C] = (byte)(videoMask1[0x0B] + videoMask1[0x09]);
         videoMask1[0x0D] = (byte)(videoMask1[0x08] - videoMask1[0x03]);
-        videoMask1[0x0E] = (byte)(videoMask1[0x0D] ^ 0xFF);
+        videoMask1[0x0E] = (byte)~videoMask1[0x0D];
         videoMask1[0x0F] = (byte)(videoMask1[0x0A] - videoMask1[0x0B]);
         videoMask1[0x10] = (byte)(videoMask1[0x08] - videoMask1[0x0F]);
         videoMask1[0x11] = (byte)(videoMask1[0x10] ^ videoMask1[0x07]);
-        videoMask1[0x12] = (byte)(videoMask1[0x0F] ^ 0xFF);
+        videoMask1[0x12] = (byte)~videoMask1[0x0F];
         videoMask1[0x13] = (byte)(videoMask1[0x03] ^ 0x10);
         videoMask1[0x14] = (byte)(videoMask1[0x04] - 0x32);
         videoMask1[0x15] = (byte)(videoMask1[0x05] + 0xED);
@@ -51,18 +48,20 @@ public readonly struct USM : IEquatable<USM>
         videoMask1[0x18] = (byte)(videoMask1[0x15] + videoMask1[0x07]);
         videoMask1[0x19] = (byte)(0x21 - videoMask1[0x13]);
         videoMask1[0x1A] = (byte)(videoMask1[0x14] ^ videoMask1[0x17]);
-        videoMask1[0x1B] = (byte)(videoMask1[0x16] + videoMask1[0x16]);
+        videoMask1[0x1B] = (byte)(videoMask1[0x16] << 1);
         videoMask1[0x1C] = (byte)(videoMask1[0x17] + 0x44);
         videoMask1[0x1D] = (byte)(videoMask1[0x03] + videoMask1[0x04]);
         videoMask1[0x1E] = (byte)(videoMask1[0x05] - videoMask1[0x16]);
         videoMask1[0x1F] = (byte)(videoMask1[0x1D] ^ videoMask1[0x13]);
-        for (int i = 0; i < 0x20; i++)
-        {
-            const uint table = ('C' << 24) | ('U' << 16) | ('R' << 8) | 'U';
-            videoMask2[i] = (byte)(videoMask1[i] ^ 0xFF);
-            audioMask[i] = (byte)((i & 1) == 1 ? table >> ((i & 0b110) << 2) : videoMask1[i] ^ 0xFFu);
-            // audioMask[i] = (byte)((i & 1) == 1 ? "URUC"u8[i >> 1 & 3] : videoMask1[i] ^ 0xFF);
-        }
+        Span<ulong> videoMask1View = MemoryMarshal.Cast<byte, ulong>(videoMask1);
+        Span<ulong> videoMask2View = MemoryMarshal.Cast<byte, ulong>(videoMask2);
+        Span<ulong> audioMaskView = MemoryMarshal.Cast<byte, ulong>(audioMask);
+        ulong maskA = BitConverter.IsLittleEndian ? 0x00FF00FF00FF00FFUL : 0xFF00FF00FF00FF00UL;
+        ulong maskB = BitConverter.IsLittleEndian ?
+            (((ulong)'C' << 56) | ((ulong)'U' << 40) | ((ulong)'R' << 24) | ((ulong)'U' << 8)) :
+            (((ulong)'U' << 48) | ((ulong)'R' << 32) | ((ulong)'U' << 16) | ((ulong)'C' << 0));
+        for (int i = 0; i < 4; i++)
+            audioMaskView[i] = ((videoMask2View[i] = ~videoMask1View[i]) & maskA) | maskB;
     }
     private void MaskVideo(Span<byte> data)
     {
