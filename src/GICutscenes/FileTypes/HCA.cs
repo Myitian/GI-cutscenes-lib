@@ -68,8 +68,8 @@ public readonly struct HCA : IEquatable<HCA>
     [SkipLocalsInit]
     public HCA(ulong key)
     {
-        // Note: Using `SkipLocalsInit` here seems to have almost no effect on reducing execution time.
-        //       It might reduce a few instructions, such as `vmovdqa` or `vmovdqu`.
+        // Note: Using `SkipLocalsInit` here might reduce a few instructions, such as `vmovdqa` or `vmovdqu`,
+        //       but seems to have almost no effect on reducing execution time.
         //       Since it doesn't cause any problems, we've kept it.
         Span<byte> ciphTable = _ciphTable;
         Span<byte> t1 = stackalloc byte[8];
