@@ -1,5 +1,5 @@
 <Solution>
   <Project Path="src/GICutscenes/GICutscenes.csproj" />
-  <Project Path="src/GICutscenes.Benchmark/GICutscenes.Benchmark.csproj"/>
+  <Project Path="src/GICutscenes.Benchmark/GICutscenes.Benchmark.csproj" />
   <Project Path="src/GICutscenes.CLI/GICutscenes.CLI.csproj" />
 </Solution>

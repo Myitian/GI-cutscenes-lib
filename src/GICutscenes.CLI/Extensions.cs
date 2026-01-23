@@ -1,9 +1,14 @@
 ﻿using Microsoft.Extensions.Logging;
+using SimpleArgs;
 
 namespace GICutscenes.CLI;
 
 static class Extensions
 {
+    public static string GetStringArgument(this ArgParser argx, string name)
+    {
+        return argx.TryGetString(name, out string? value) ? value : throw new KeyNotFoundException();
+    }
     public static void InvokeLog(
         this Action<ILogger, Exception?> action,
         ILogger? logger,

@@ -13,8 +13,4 @@ public static class KeyUtils
             key = key * 3 + c;
         return key;
     }
-    public static ulong MergeEncryptionKey(ulong key1, ulong key2)
-    {
-        return key1 + key2;
-    }
 }

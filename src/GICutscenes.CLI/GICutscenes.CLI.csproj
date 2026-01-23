@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
+    <Version>0.5.0</Version>
     <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
     <Authors>ToaHartor, Myitian</Authors>
     <Description>A command line program playing with the cutscenes files (USM) from Genshin Impact.</Description>
@@ -9,19 +10,30 @@
     <RepositoryUrl>https://github.com/ToaHartor/GI-cutscenes</RepositoryUrl>
 
     <RollForward>LatestMajor</RollForward>
-		<Nullable>enable</Nullable>
-		<LangVersion>preview</LangVersion>
-		<ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <Nullable>enable</Nullable>
+    <LangVersion>preview</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
     <IsAotCompatible>true</IsAotCompatible>
-		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<RepositoryType>git</RepositoryType>
-		<EnableTrimAnalyzer>true</EnableTrimAnalyzer>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryType>git</RepositoryType>
+    <EnableTrimAnalyzer>true</EnableTrimAnalyzer>
   </PropertyGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\GICutscenes\GICutscenes.csproj" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="*" />
-    <PackageReference Include="System.IO.Pipelines" Version="*" />
+    <PackageReference Include="Myitian.SimpleArgs" Version="*" />
   </ItemGroup>
-
+  <ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="[8,)" />
+    <PackageReference Include="System.IO.Pipelines" Version="[8,)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="[9,)" />
+    <PackageReference Include="System.IO.Pipelines" Version="[9,)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net10.0'">
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="[10,)" />
+    <PackageReference Include="System.IO.Pipelines" Version="[10,)" />
+  </ItemGroup>
 </Project>

@@ -41,13 +41,22 @@ static class Events
     public static readonly EventId ProcessFile = new(2902, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(ProcessFile)}");
 
     /// <summary>
+    /// File not found: {File}
+    /// </summary>
+    internal static readonly Action<ILogger, string, Exception?> LogFileNotFoundWarning = LoggerMessage.Define<string>(
+        LogLevel.Error,
+        FileNotFoundWarning,
+        "File not found: {File}");
+    public static readonly EventId FileNotFoundWarning = new(8900, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(FileNotFoundWarning)}");
+
+    /// <summary>
     /// No version info for {File}, skipping...
     /// </summary>
     internal static readonly Action<ILogger, string, Exception?> LogNoVersionInfoFor = LoggerMessage.Define<string>(
         LogLevel.Warning,
         NoVersionInfoFor,
         "No version info for {File}, skipping...");
-    public static readonly EventId NoVersionInfoFor = new(8900, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(NoVersionInfoFor)}");
+    public static readonly EventId NoVersionInfoFor = new(8901, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(NoVersionInfoFor)}");
 
     /// <summary>
     /// Not a USM file, skipping...
@@ -56,16 +65,16 @@ static class Events
         LogLevel.Warning,
         NotUSM,
         "Not a USM file, skipping...");
-    public static readonly EventId NotUSM = new(8901, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(NotUSM)}");
+    public static readonly EventId NotUSM = new(8902, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(NotUSM)}");
 
     /// <summary>
     /// File not found: {File}
     /// </summary>
-    internal static readonly Action<ILogger, string, Exception?> LogFileNotFound = LoggerMessage.Define<string>(
+    internal static readonly Action<ILogger, string, Exception?> LogFileNotFoundError = LoggerMessage.Define<string>(
         LogLevel.Error,
-        FileNotFound,
+        FileNotFoundError,
         "File not found: {File}");
-    public static readonly EventId FileNotFound = new(9900, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(FileNotFound)}");
+    public static readonly EventId FileNotFoundError = new(9900, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(FileNotFoundError)}");
 
     /// <summary>
     /// No version info loaded
@@ -83,7 +92,7 @@ static class Events
         LogLevel.Error,
         USMDemuxFailed,
         "USM demux failed");
-    public static readonly EventId USMDemuxFailed = new(9901, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(USMDemuxFailed)}");
+    public static readonly EventId USMDemuxFailed = new(9902, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(USMDemuxFailed)}");
 
     /// <summary>
     /// HCA demux failed: Ch.{ChNo}
@@ -92,5 +101,23 @@ static class Events
         LogLevel.Error,
         HCADecryptFailed,
         "HCA demux failed: Ch.{ChNo}");
-    public static readonly EventId HCADecryptFailed = new(9901, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(HCADecryptFailed)}");
+    public static readonly EventId HCADecryptFailed = new(9903, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(HCADecryptFailed)}");
+
+    /// <summary>
+    /// Missing value for argument {Argument}
+    /// </summary>
+    internal static readonly Action<ILogger, string, Exception?> LogMissingValueForArgument = LoggerMessage.Define<string>(
+        LogLevel.Error,
+        MissingValueForArgument,
+        "Missing value for argument {Argument}");
+    public static readonly EventId MissingValueForArgument = new(9904, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(MissingValueForArgument)}");
+
+    /// <summary>
+    /// Invalid value for argument {Argument}: {Value}
+    /// </summary>
+    internal static readonly Action<ILogger, string, string, Exception?> LogInvalidValueForArgument = LoggerMessage.Define<string, string>(
+        LogLevel.Error,
+        InvalidValueForArgument,
+        "Invalid value for argument {Argument}: {Value}");
+    public static readonly EventId InvalidValueForArgument = new(9905, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(InvalidValueForArgument)}");
 }
