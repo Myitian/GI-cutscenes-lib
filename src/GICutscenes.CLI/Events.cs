@@ -14,6 +14,15 @@ static class Events
     public static readonly EventId Done = new(1900, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(Done)}");
 
     /// <summary>
+    /// Total: {Total}, Succeed: {Succeed}
+    /// </summary>
+    internal static readonly Action<ILogger, long, long, Exception?> LogStatistics = LoggerMessage.Define<long, long>(
+        LogLevel.Information,
+        Statistics,
+        "Total: {Total}, Succeed: {Succeed}");
+    public static readonly EventId Statistics = new(1901, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(Statistics)}");
+
+    /// <summary>
     /// Read file: {File}
     /// </summary>
     internal static readonly Action<ILogger, string, Exception?> LogReadFile = LoggerMessage.Define<string>(
@@ -50,12 +59,12 @@ static class Events
     public static readonly EventId FileNotFoundWarning = new(8900, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(FileNotFoundWarning)}");
 
     /// <summary>
-    /// No version info for {File}, skipping...
+    /// No version info for {File}
     /// </summary>
     internal static readonly Action<ILogger, string, Exception?> LogNoVersionInfoFor = LoggerMessage.Define<string>(
         LogLevel.Warning,
         NoVersionInfoFor,
-        "No version info for {File}, skipping...");
+        "No version info for {File}");
     public static readonly EventId NoVersionInfoFor = new(8901, $"{nameof(GICutscenes)}_{nameof(CLI)}_{nameof(NoVersionInfoFor)}");
 
     /// <summary>

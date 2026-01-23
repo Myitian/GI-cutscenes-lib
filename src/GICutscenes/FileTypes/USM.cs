@@ -111,7 +111,7 @@ public readonly struct USM : IEquatable<USM>
                 int size = (int)(dataSize - dataOffset - paddingSize);
                 if (size < 0 || dataOffset < 0x18)
                 {
-                    USMEvents.LogInvalidData.InvokeLog(logger, dataSize, dataOffset, paddingSize);
+                    logger?.LogAction(USMEvents.LogInvalidData, dataSize, dataOffset, paddingSize);
                     return false;
                 }
                 input.Seek(dataOffset - 0x18, SeekOrigin.Current);
@@ -120,7 +120,7 @@ public readonly struct USM : IEquatable<USM>
                 int read = input.ReadAtLeast(data, size, false);
                 if (read < size)
                 {
-                    CommonEvents.LogStreamEndedTooEarly.InvokeLog(logger, size, read);
+                    logger?.LogAction(CommonEvents.LogStreamEndedTooEarly, size, read);
                     return false;
                 }
                 switch (signature)
@@ -131,7 +131,7 @@ public readonly struct USM : IEquatable<USM>
                     case ('@' << 24) | ('S' << 16) | ('F' << 8) | 'V':
                         if (videoOutputFactory is null)
                         {
-                            USMEvents.LogSkipSFVChunk.InvokeLog(logger);
+                            logger?.LogAction(USMEvents.LogSkipSFVChunk);
                             break;
                         }
                         switch (dataType)
@@ -142,7 +142,7 @@ public readonly struct USM : IEquatable<USM>
                                 videoOutput.Write(data);
                                 break;
                             default: // Not implemented, we don't have any uses for it
-                                USMEvents.LogSkipUnusedVideoDataType.InvokeLog(logger, dataType);
+                                logger?.LogAction(USMEvents.LogSkipUnusedVideoDataType, dataType);
                                 break;
                         }
                         break;
@@ -150,7 +150,7 @@ public readonly struct USM : IEquatable<USM>
                     case ('@' << 24) | ('S' << 16) | ('F' << 8) | 'A':
                         if (audioOutputFactory is null)
                         {
-                            USMEvents.LogSkipSFAChunk.InvokeLog(logger);
+                            logger?.LogAction(USMEvents.LogSkipSFAChunk);
                             break;
                         }
                         switch (dataType)
@@ -164,7 +164,7 @@ public readonly struct USM : IEquatable<USM>
                                 audioOutput.Write(data);
                                 break;
                             default: // No need to implement it, we lazy
-                                USMEvents.LogSkipUnusedAudioDataType.InvokeLog(logger, dataType);
+                                logger?.LogAction(USMEvents.LogSkipUnusedAudioDataType, dataType);
                                 break;
                         }
                         break;
@@ -174,9 +174,9 @@ public readonly struct USM : IEquatable<USM>
                         if (signature is (('@' << 24) | ('C' << 16) | ('U' << 8) | 'E'))
                             // Might be used to play a certain part of the video, but shouldn't be needed anyway
                             // (appears in cutscene Cs_Sumeru_AQ30161501_DT)
-                            USMEvents.LogSkipCUEChunk.InvokeLog(logger);
+                            logger.LogAction(USMEvents.LogSkipCUEChunk);
                         else
-                            USMEvents.LogSkipUnknownChunk.InvokeLog(logger, signature);
+                            logger.LogAction(USMEvents.LogSkipUnknownChunk, signature);
                         break;
                 }
                 input.Seek(paddingSize, SeekOrigin.Current);
@@ -219,7 +219,7 @@ public readonly struct USM : IEquatable<USM>
                 int size = (int)(dataSize - dataOffset - paddingSize);
                 if (size < 0 || dataOffset < 0x18)
                 {
-                    USMEvents.LogInvalidData.InvokeLog(logger, dataSize, dataOffset, paddingSize);
+                    logger?.LogAction(USMEvents.LogInvalidData, dataSize, dataOffset, paddingSize);
                     return false;
                 }
                 input.Seek(dataOffset - 0x18, SeekOrigin.Current);
@@ -228,7 +228,7 @@ public readonly struct USM : IEquatable<USM>
                 int read = await input.ReadAtLeastAsync(data, size, false, cancellationToken).ConfigureAwait(false);
                 if (read < size)
                 {
-                    CommonEvents.LogStreamEndedTooEarly.InvokeLog(logger, size, read);
+                    logger?.LogAction(CommonEvents.LogStreamEndedTooEarly, size, read);
                     return false;
                 }
                 switch (signature)
@@ -239,7 +239,7 @@ public readonly struct USM : IEquatable<USM>
                     case ('@' << 24) | ('S' << 16) | ('F' << 8) | 'V':
                         if (videoOutputFactory is null)
                         {
-                            USMEvents.LogSkipSFVChunk.InvokeLog(logger);
+                            logger?.LogAction(USMEvents.LogSkipSFVChunk);
                             break;
                         }
                         switch (dataType)
@@ -250,7 +250,7 @@ public readonly struct USM : IEquatable<USM>
                                 await videoOutput.WriteAsync(data, cancellationToken).ConfigureAwait(false);
                                 break;
                             default: // Not implemented, we don't have any uses for it
-                                USMEvents.LogSkipUnusedVideoDataType.InvokeLog(logger, dataType);
+                                logger?.LogAction(USMEvents.LogSkipUnusedVideoDataType, dataType);
                                 break;
                         }
                         break;
@@ -258,7 +258,7 @@ public readonly struct USM : IEquatable<USM>
                     case ('@' << 24) | ('S' << 16) | ('F' << 8) | 'A':
                         if (audioOutputFactory is null)
                         {
-                            USMEvents.LogSkipSFAChunk.InvokeLog(logger);
+                            logger?.LogAction(USMEvents.LogSkipSFAChunk);
                             break;
                         }
                         switch (dataType)
@@ -272,7 +272,7 @@ public readonly struct USM : IEquatable<USM>
                                 await audioOutput.WriteAsync(data, cancellationToken).ConfigureAwait(false);
                                 break;
                             default: // No need to implement it, we lazy
-                                USMEvents.LogSkipUnusedAudioDataType.InvokeLog(logger, dataType);
+                                logger?.LogAction(USMEvents.LogSkipUnusedAudioDataType, dataType);
                                 break;
                         }
                         break;
@@ -282,9 +282,9 @@ public readonly struct USM : IEquatable<USM>
                         if (signature is (('@' << 24) | ('C' << 16) | ('U' << 8) | 'E'))
                             // Might be used to play a certain part of the video, but shouldn't be needed anyway
                             // (appears in cutscene Cs_Sumeru_AQ30161501_DT)
-                            USMEvents.LogSkipCUEChunk.InvokeLog(logger);
+                            logger.LogAction(USMEvents.LogSkipCUEChunk);
                         else
-                            USMEvents.LogSkipUnknownChunk.InvokeLog(logger, signature);
+                            logger.LogAction(USMEvents.LogSkipUnknownChunk, signature);
                         break;
                 }
                 input.Seek(paddingSize, SeekOrigin.Current);

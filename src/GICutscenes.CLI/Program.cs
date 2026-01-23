@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using SimpleArgs;
+using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -14,7 +15,7 @@ static partial class Program
     private static LogLevel _logLevel = LogLevel.Information;
     private static KeyMode _keyMode = KeyMode.Default;
     private static ulong _key = 0;
-    private static bool _usmOnly = false;
+    private static bool _usmOnly = true;
     private static bool _outputVideo = true;
     private static bool _outputAudio = true;
 
@@ -64,7 +65,7 @@ static partial class Program
             },
             new(argUSMOnly, 1, "-usmonly")
             {
-                Default = "false",
+                Default = "true",
                 Info = "boolean: only process files with .usm extension"
             },
             new(argOutputVideo, 1, "-v")
@@ -130,26 +131,26 @@ static partial class Program
             return 1;
         }
         if (_logLevel < LogLevel.None)
-        {
-            using ILoggerFactory loggerFactory = LoggerFactory.Create(BuildLoggerFactory);
-            _logger = loggerFactory.CreateLogger("Main");
-        }
+            _logger = new ConsoleOutLogger(_logLevel);
         if (!File.Exists(versionJson))
-            Events.LogFileNotFoundWarning.InvokeLog(_logger, versionJson);
+            _logger?.LogAction(Events.LogFileNotFoundWarning, versionJson);
         else
         {
             using FileStream versionsStream = File.OpenRead(versionJson);
             VersionList? versions = JsonSerializer.Deserialize(versionsStream, VersionJson.Default.VersionList);
             if (versions?.List is null)
-                Events.LogNoVersionInfoLoaded.InvokeLog(_logger);
+                _logger?.LogAction(Events.LogNoVersionInfoLoaded);
             else
                 VersionInfo.Flatten(versions.List, FlattenAction);
         }
 
         Directory.CreateDirectory(outputDir);
-        int count = 0;
+        long count = 0, total = 0;
         if (File.Exists(usm))
+        {
             count += ProcessUSM(usm, outputDir) ? 1 : 0;
+            total++;
+        }
         else if (Directory.Exists(usm))
         {
             foreach (string usmFile in Directory.EnumerateFiles(usm, _usmOnly ? "*.usm" : "*", new EnumerationOptions()
@@ -160,15 +161,18 @@ static partial class Program
                 MatchType = MatchType.Simple
             }))
             {
-                string rOutputDir = Path.Combine(outputDir, Path.GetRelativePath(usmFile, usm));
+                string relative = Path.GetRelativePath(usm, Path.GetDirectoryName(usmFile)!);
+                string rOutputDir = relative == "." ? outputDir : Path.Combine(outputDir, relative);
                 count += ProcessUSM(usmFile, rOutputDir) ? 1 : 0;
+                total++;
             }
         }
         else
         {
-            Events.LogFileNotFoundError.InvokeLog(_logger, usm);
+            _logger?.LogAction(Events.LogFileNotFoundError, usm);
             return 1;
         }
+        _logger?.LogAction(Events.LogStatistics, total, count);
         return 0;
     }
     private static void PrintHelp(ArgParser argx)
@@ -206,19 +210,14 @@ static partial class Program
 
     private static void FlattenAction(string name, ulong key, bool encAudio)
         => _versionMap[name] = key;
-    private static void BuildLoggerFactory(ILoggingBuilder builder)
-    {
-        builder.AddConsole();
-        builder.SetMinimumLevel(_logLevel);
-    }
     private static bool ProcessUSM(string file, string outputDir)
     {
         if (!File.Exists(file))
             return false;
-        Events.LogProcessFile.InvokeLog(_logger, file);
+        _logger?.LogAction(Events.LogProcessFile, file);
         if (_usmOnly && !Path.GetExtension(file.AsSpan()).Equals(".usm", StringComparison.OrdinalIgnoreCase))
         {
-            Events.LogNotUSM.InvokeLog(_logger);
+            _logger?.LogAction(Events.LogNotUSM);
             return false;
         }
         string usmName = Path.GetFileNameWithoutExtension(file);
@@ -229,7 +228,7 @@ static partial class Program
                 key += keyE;
             else
             {
-                Events.LogNoVersionInfoFor.InvokeLog(_logger, usmName);
+                _logger?.LogAction(Events.LogNoVersionInfoFor, usmName);
                 key += _key;
             }
         }
@@ -241,13 +240,13 @@ static partial class Program
             {
                 if (!_versionMap.TryGetValue(usmName, out ulong keyE))
                 {
-                    Events.LogNoVersionInfoFor.InvokeLog(_logger, usmName);
+                    _logger?.LogAction(Events.LogNoVersionInfoFor, usmName);
                     return false;
                 }
                 key += keyE;
             }
         }
-        Events.LogReadFile.InvokeLog(_logger, file);
+        _logger?.LogAction(Events.LogReadFile, file);
         bool result;
         try
         {
@@ -267,15 +266,15 @@ static partial class Program
         }
         catch (Exception ex)
         {
-            Events.LogUSMDemuxFailed.InvokeLog(_logger, ex);
+            _logger?.LogAction(Events.LogUSMDemuxFailed, ex);
             return false;
         }
         if (!result)
         {
-            Events.LogUSMDemuxFailed.InvokeLog(_logger);
+            _logger?.LogAction(Events.LogUSMDemuxFailed);
             return false;
         }
-        Events.LogDone.InvokeLog(_logger);
+        _logger?.LogAction(Events.LogDone);
         return true;
     }
 
@@ -297,14 +296,112 @@ static partial class Program
         public Stream VideoOutputFactory()
         {
             string ivfFile = Path.Combine(outputDir, $"{usmName}.ivf");
-            Events.LogCreateFile.InvokeLog(_logger, ivfFile);
+            _logger?.LogAction(Events.LogCreateFile, ivfFile);
             return File.Open(ivfFile, FileMode.Create, FileAccess.Write, FileShare.Read);
         }
         public Stream AudioOutputFactory(byte chNo)
         {
             string hcaFile = Path.Combine(outputDir, $"{usmName}.{chNo}.hca");
-            Events.LogCreateFile.InvokeLog(_logger, hcaFile);
+            _logger?.LogAction(Events.LogCreateFile, hcaFile);
             return File.Open(hcaFile, FileMode.Create, FileAccess.Write, FileShare.Read);
         }
+    }
+}
+sealed class ConsoleOutLogger(LogLevel minLevel = LogLevel.Information) : ILogger
+{
+    static ConsoleOutLogger()
+    {
+        Task.Run(Process);
+    }
+    private static readonly BlockingCollection<LogEntry> _queue = new(8192);
+    private static void Process()
+    {
+        AppDomain.CurrentDomain.ProcessExit += CompleteAdding;
+        Span<char> buffer = stackalloc char[32];
+        while (_queue.TryTake(out LogEntry entry, Timeout.Infinite))
+        {
+            Console.Out.Write('[');
+            Console.ForegroundColor = ConsoleColor.DarkGreen;
+            Console.BackgroundColor = ConsoleColor.Black;
+            DateTime.Now.TryFormat(buffer, out int count, "yyyy/MM/dd HH:mm:ss.fff");
+            Console.Out.Write(buffer[..count]);
+            Console.ResetColor();
+            Console.Out.Write("] [");
+            ConsoleColorPair color = GetLogLevelConsoleColors(entry.LogLevel);
+            Console.ForegroundColor = color.Foreground;
+            Console.BackgroundColor = color.Background;
+            Console.Out.Write(GetLogLevelString(entry.LogLevel));
+            Console.ResetColor();
+            Console.Out.Write("]: ");
+            if (entry.Message is not null)
+                Console.Out.WriteLine(entry.Message);
+            if (entry.Exception is not null)
+            {
+                Console.ForegroundColor = ConsoleColor.Red;
+                Console.BackgroundColor = ConsoleColor.Black;
+                Console.Out.WriteLine(entry.Exception);
+            }
+            Console.ResetColor();
+        }
+    }
+    private static void CompleteAdding(object? sender, EventArgs e)
+    {
+        _queue.CompleteAdding();
+        AppDomain.CurrentDomain.ProcessExit -= CompleteAdding;
+    }
+    public void Log<TState>(
+        LogLevel logLevel,
+        EventId eventId,
+        TState state,
+        Exception? exception,
+        Func<TState, Exception?, string> formatter)
+    {
+        if (!IsEnabled(logLevel))
+            return;
+        string? message = formatter?.Invoke(state, exception);
+        if (exception is null && message is null)
+            return;
+        _queue.TryAdd(new(logLevel, message, exception), Timeout.Infinite);
+    }
+    public bool IsEnabled(LogLevel logLevel)
+        => logLevel >= minLevel;
+    public IDisposable BeginScope<TState>(TState state)
+        => NullLogger.Instance.BeginScope(state);
+    private static string GetLogLevelString(LogLevel logLevel)
+    {
+        return logLevel switch
+        {
+            LogLevel.Trace => "TRACE",
+            LogLevel.Debug => "DEBUG",
+            LogLevel.Information => "INFO",
+            LogLevel.Warning => "WARN",
+            LogLevel.Error => "ERROR",
+            LogLevel.Critical => "FATAL",
+            _ => logLevel.ToString()
+        };
+    }
+    private static ConsoleColorPair GetLogLevelConsoleColors(LogLevel logLevel)
+    {
+        return logLevel switch
+        {
+            LogLevel.Debug => new(ConsoleColor.Gray, ConsoleColor.Black),
+            LogLevel.Information => new(ConsoleColor.Green, ConsoleColor.Black),
+            LogLevel.Warning => new(ConsoleColor.Yellow, ConsoleColor.Black),
+            LogLevel.Error => new(ConsoleColor.Red, ConsoleColor.Black),
+            LogLevel.Critical => new(ConsoleColor.White, ConsoleColor.DarkRed),
+            _ => new(ConsoleColor.Gray, ConsoleColor.Black)
+        };
+    }
+    private readonly struct ConsoleColorPair(ConsoleColor foreground, ConsoleColor background)
+    {
+        public readonly ConsoleColor Foreground = foreground;
+        public readonly ConsoleColor Background = background;
+    }
+    private readonly struct LogEntry(LogLevel logLevel, string? message, Exception? exception)
+    {
+        public readonly DateTime DateTime = DateTime.Now;
+        public readonly string? Message = message;
+        public readonly Exception? Exception = exception;
+        public readonly LogLevel LogLevel = logLevel;
     }
 }

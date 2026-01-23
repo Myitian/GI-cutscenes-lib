@@ -55,12 +55,12 @@ sealed class DemuxContext
         }
         catch (Exception ex)
         {
-            Events.LogHCADecryptFailed.InvokeLog(_logger, chNo, ex);
+            _logger?.LogAction(Events.LogHCADecryptFailed, chNo, ex);
             return false;
         }
         if (!result)
         {
-            Events.LogHCADecryptFailed.InvokeLog(_logger, chNo);
+            _logger?.LogAction(Events.LogHCADecryptFailed, chNo);
             return false;
         }
         return true;

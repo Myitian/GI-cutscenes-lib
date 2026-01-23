@@ -178,7 +178,7 @@ public readonly struct HCA : IEquatable<HCA>
         int headerSize = BinaryPrimitives.ReadUInt16BigEndian(hcaBytes[6..]);
         if (sign is not (('H' << 24) | ('C' << 16) | ('A' << 8)) || headerSize < magicSize)
         {
-            HCAEvents.LogInvalidSignature.InvokeLog(logger, Convert.ToHexString(hcaBytes));
+            logger?.LogAction(HCAEvents.LogInvalidSignature, Convert.ToHexString(hcaBytes));
             return false;
         }
         BinaryPrimitives.WriteUInt32BigEndian(hcaBytes, sign);
@@ -229,19 +229,19 @@ public readonly struct HCA : IEquatable<HCA>
                     case ('p' << 24) | ('a' << 16) | ('d' << 8):
                         goto HEAD_END;
                     default:
-                        HCAEvents.LogInvalidHeaderUnknownBlock.InvokeLog(logger, sign);
+                        logger?.LogAction(HCAEvents.LogInvalidHeaderUnknownBlock, sign);
                         return false;
                 }
             }
         HEAD_END:
             if (blockSize == 0)
             {
-                HCAEvents.LogInvalidHeaderBlockSizeIsZero.InvokeLog(logger);
+                logger?.LogAction(HCAEvents.LogInvalidHeaderBlockSizeIsZero);
                 return false;
             }
             if (cipherType is not (0 or 1 or 56))
             {
-                HCAEvents.LogInvalidHeaderUnknownCipherType.InvokeLog(logger, cipherType);
+                logger?.LogAction(HCAEvents.LogInvalidHeaderUnknownCipherType, cipherType);
                 return false;
             }
             header = array.Array.AsSpan(headerSize);
@@ -272,7 +272,7 @@ public readonly struct HCA : IEquatable<HCA>
                         block[^1] = (byte)(checksum >> 8);
                         goto default;
                     default:
-                        CommonEvents.LogStreamEndedTooEarly.InvokeLog(logger, blockSize, read);
+                        logger?.LogAction(CommonEvents.LogStreamEndedTooEarly, blockSize, read);
                         break;
                 }
                 output.Write(array.Array, 0, blockSize);
@@ -296,7 +296,7 @@ public readonly struct HCA : IEquatable<HCA>
         int headerSize = BinaryPrimitives.ReadUInt16BigEndian(hcaBytes.AsSpan(6));
         if (sign is not (('H' << 24) | ('C' << 16) | ('A' << 8)) || headerSize < magicSize)
         {
-            HCAEvents.LogInvalidSignature.InvokeLog(logger, Convert.ToHexString(hcaBytes));
+            logger?.LogAction(HCAEvents.LogInvalidSignature, Convert.ToHexString(hcaBytes));
             return false;
         }
         BinaryPrimitives.WriteUInt32BigEndian(hcaBytes, sign);
@@ -347,19 +347,19 @@ public readonly struct HCA : IEquatable<HCA>
                     case ('p' << 24) | ('a' << 16) | ('d' << 8):
                         goto HEAD_END;
                     default:
-                        HCAEvents.LogInvalidHeaderUnknownBlock.InvokeLog(logger, sign);
+                        logger?.LogAction(HCAEvents.LogInvalidHeaderUnknownBlock, sign);
                         return false;
                 }
             }
         HEAD_END:
             if (blockSize == 0)
             {
-                HCAEvents.LogInvalidHeaderBlockSizeIsZero.InvokeLog(logger);
+                logger?.LogAction(HCAEvents.LogInvalidHeaderBlockSizeIsZero);
                 return false;
             }
             if (cipherType is not (0 or 1 or 56))
             {
-                HCAEvents.LogInvalidHeaderUnknownCipherType.InvokeLog(logger, cipherType);
+                logger?.LogAction(HCAEvents.LogInvalidHeaderUnknownCipherType, cipherType);
                 return false;
             }
             header = array.Array.AsMemory(0, headerSize);
@@ -390,7 +390,7 @@ public readonly struct HCA : IEquatable<HCA>
                         span[^1] = (byte)(checksum >> 8);
                         goto default;
                     default:
-                        CommonEvents.LogStreamEndedTooEarly.InvokeLog(logger, blockSize, read);
+                        logger?.LogAction(CommonEvents.LogStreamEndedTooEarly, blockSize, read);
                         break;
                 }
                 await output.WriteAsync(block, cancellationToken).ConfigureAwait(false);
